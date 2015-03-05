@@ -1,0 +1,87 @@
+#!/usr/bin/env python
+
+from __future__ import division,print_function
+from graphviz import Digraph
+import csv
+import re
+
+def sanitize(info):
+  return re.sub(' - .*','',info).strip()
+
+def fields(entry,header,**kwds):
+  d = {}
+  for k,(v,v2) in kwds.items():
+    x = entry[header.index(v)]
+    if not x or x == 'Name does not appear in this list':
+      x = entry[header.index(v2)]
+    x = sanitize(x) if x else None
+    d[k] = x
+  return d
+
+def valid(d):
+  for v in d.values():
+    if not v:
+      return False
+  return True
+
+fs = {
+  'name': ('Who are you?',
+           "If your name isn't in the list, please enter it here.  "),
+  'inviter': ('Who invited you to Phage?  If you are Original Phage, choose yourself. ',
+              "If the person who invited you isn't in the menu above, please put their name here"),
+  'resolver1': ('First ranked choice person for conflict resolution',
+                "1st choice conflict resolver: If the person who you chose isn't in the menu above, please put their name here"),
+  'resolver2': ('Second rank choice person for conflict resolution',
+                "2nd choice conflict resolver: If the person who you chose isn't in the menu above, please put their name here"),
+  'cook1': ('A Phageling you trust to enjoy cooking with!',
+            "Cooking friend 1: If the person who you chose isn't in the menu above, please put their name here"),
+  'cook2': ('A second Phageling you trust to enjoy cooking with!',
+            "Cooking friend 2: If the person who you chose isn't in the menu above, please put their name here"),
+  'cook3': ('A third Phageling you trust to enjoy cooking with!',
+            "Cooking friend 3: If the person who you chose isn't in the menu above, please put their name here"),
+  'sage1': ('A Phageling you would approach for life advice:',
+            "Sage friend 1: If the person who you chose isn't in the menu above, please put their name here"),
+  'sage2': ('A second Phageling you would approach for life advice:',
+            "Sage friend 2: If the person who you chose isn't in the menu above, please put their name here"),
+}
+
+def draw(data,id,edges,file,label=None):
+  G = Digraph(comment=file)
+  nodes = {}
+  def node(i):
+    if i not in nodes:
+      n = str(len(nodes))
+      nodes[i] = n
+      G.node(n,label=(None if label is None else label(i)))
+    return nodes[i]
+  for d in data:
+    if d[id]:
+      x = node(d[id])
+      for e in edges:
+        if d[e]:
+          G.edge(x,node(d[e]))
+  G.render(filename=file)
+
+def main():
+  lines = tuple(csv.reader(open('votes.csv','rb')))
+  header = lines[0]
+  print('fields:')
+  for h in header:
+    print('  '+repr(h))
+  print
+  data = [fields(e,header,**fs) for e in lines[1:]]
+  data = [d for d in data if d is not None]
+  print('count = %d'%len(data))
+  print('valid = %d'%len(filter(valid,data)))
+  #data = filter(valid,data)
+
+  def name(email):
+    return re.sub('-.*','',email).strip()
+
+  draw(data,'name',['resolver1','resolver2'],file='resolve',label=name)
+  draw(data,'name',['sage1','sage2'],file='sage',label=name)
+  draw(data,'name',['cook1','cook2','cook3'],file='cook',label=name)
+  draw(data,'name',['inviter'],file='invite',label=name)
+
+if __name__=='__main__':
+  main()
