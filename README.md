@@ -7,14 +7,21 @@ Graphs and analyses of proxy voting information for Phage.
 
 The code is pure python, but depends on
 
-* [Graphviz](www.graphviz.org): Graph visualization
-* [Graphviz python module](https://pypi.python.org/pypi/graphviz): Obvious
-* [PyMC](https://github.com/pymc-devs/pymc): Markov chain Monte Carlo
+* [Graphviz](http://graphviz.org): Graph visualization
+* [Graphviz python module](https://pypi.python.org/pypi/graphviz): Graphviz interface
+* [Numpy](http://numpy.org): Efficient multidimensional arrays
+* [Scipy](http://scipy.org): Scientific computation
 
 On Mac with Homebrew, these can be installed via
 
     brew install graphviz
-    pip install graphviz pymc
+    pip install graphviz numpy scipy
+
+The failed Bayesian network model also required
+
+* [PyMC](https://github.com/pymc-devs/pymc): Markov chain Monte Carlo
+
+but the current code does not.
 
 ## Model
 
