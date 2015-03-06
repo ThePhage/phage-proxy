@@ -238,6 +238,8 @@ def lazy_vote(G,r=5,p=1/2,samples=1000,iters=1000,seed=8121):
 
   # Color based on average amount of voting power
   color = mean(dists,axis=0)
+  if 0: # Transform to be a straight line
+    color[argsort(color)] = arange(len(color))
   color = green_to_red(G,color)
 
   # Given a vote distribution x with sum(x) = 1 and individual preferences v_i in {0,1},
