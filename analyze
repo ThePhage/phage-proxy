@@ -2,18 +2,27 @@
 
 from __future__ import division,print_function
 from graphviz import Digraph
+from numpy import *
+import scipy.sparse
+import optparse
+import tempfile
+import shutil
 import csv
 import re
+import os
 
 def sanitize(info):
   return re.sub(' - .*','',info).strip()
 
+# TODO: Some people have duplicate entries and should be pruned accordingly
 def fields(entry,header,**kwds):
   d = {}
   for k,(v,v2) in kwds.items():
-    x = entry[header.index(v)]
+    i = header.index(v)
+    x = entry[i] if i<len(entry) else None
     if not x or x == 'Name does not appear in this list':
-      x = entry[header.index(v2)]
+      i = header.index(v2)
+      x = entry[i] if i<len(entry) else None
     x = sanitize(x) if x else None
     d[k] = x
   return d
@@ -45,43 +54,303 @@ fs = {
             "Sage friend 2: If the person who you chose isn't in the menu above, please put their name here"),
 }
 
-def draw(data,id,edges,file,label=None):
-  G = Digraph(comment=file)
+def graph(data,id,edges):
+  """Extract a graph from data, given as a dictionary node -> out_edges.
+  The graph is closed by introducing vertices with no outgoing edges if necessary."""
+  G = {}
+  def add(x):
+    if x not in G:
+      G[x] = []
+    return x
+  for d in data:
+    if d[id]:
+      x = add(d[id])
+      for e in edges:
+        if d[e]:
+          y = add(d[e])
+          G[x].append(y)
+  return G
+
+def vertices(G):
+  return sorted(G.keys())
+
+def rejection_sample(G,samples):
+  """Build a probability model for voting given a proxy graph"""
+  import pymc
+
+  V = vertices(G)
+  print('vertices = %d'%len(V))
+  deg = asarray([len(G[v]) for v in V])
+  print('max deg = %d'%deg.max())
+  E = empty((len(V),deg.max()),dtype=int)
+  for i,v in enumerate(V):
+    es = [V.index(x) for x in G[v]]
+    E[i,:len(es)] = es
+    E[i,len(es):] = i # Point remaining edges at ourselves for sentinel purposes
+
+  if 0:
+    print('V = %s'%V)
+    print('deg = %s'%deg)
+    print('E = \n%s'%E)
+
+  # Each person's vote is an iid coin flip
+  vote = pymc.Bernoulli('vote',p=1/2,size=len(V))
+
+  # Each person's acceptance probability is a function of their
+  # vote and the votes of their proxies (outgoing edges).  More
+  # specifically, A[i,j] is the probability of acceptance for
+  # a voter with i proxies, j of whom ver disagrees with.
+  # For now, we pick A = fixed < 1 if a majority disagree, otherwise A = 1.
+  i = arange(deg.max()+1)
+  A = 1 - .5*(i[:,None] < 2*i)
+  print("A =\n%s"%A)
+
+  # Acceptance *probability*, which is a deterministic function of votes
+  @pymc.deterministic
+  def accept_p(v=vote):
+    return A[deg,sum(v[E] != v[:,None],axis=-1)]
+
+  # Acceptance *events*, which are Bernoulli
+  accept = pymc.Bernoulli('accept',size=len(V),p=accept_p,value=ones(len(V)),observed=True)
+
+  # Sample model
+  M = pymc.MCMC((vote,accept_p,accept))
+  thin = 2
+  burn = 1
+  M.sample(iter=(burn+thin)*samples,burn=burn*samples,thin=thin)
+  return M.trace('vote')[:]
+
+def green_to_red(G,x):
+  V = vertices(G)
+  assert x.shape == (len(V),)
+  xmin = x.min()
+  xmax = x.max()
+  print('score range = %s %s'%(xmin,xmax))
+  def scheme(x):
+    x = (x-xmin)/(xmax-xmin)
+    r = '%02x'%(255*(1-x))
+    g = '%02x'%(255*x)
+    return '#%s%s00'%(r,g)
+  return dict((v,scheme(x[i])) for i,v in enumerate(V))
+
+def rejection_color(G,vote):
+  V = vertices(G)
+  print('votes = %s'%(vote.shape,))
+  if 0:
+    counts = zeros((2,2,2))
+    for v in vote:
+      counts[tuple(v)] += 1
+    print('counts = \n%s'%counts)
+  maj = mean(vote,axis=1) > 1/2
+  score = asarray([corrcoef(maj,v) for v in vote.T])
+  score = score[:,0,1]
+  print('score shape = %s'%(score.shape,))
+  return green_to_red(G,score)
+
+def greedy_subset(energy,n,odd=False,r=5):
+  """Choose a subset R of size r that approximately minimizes energy, using greedy plus 1-opt"""
+  def tweaked(R):
+    if len(set(R)) < len(R):
+      return inf
+    return energy(R)
+  def best(Rs):
+    Rs = asarray(list(Rs))
+    R = Rs[argmin(map(tweaked,Rs))]
+    return sort(R)
+
+  I = xrange(n)
+  if odd:
+    # Find the best singleton
+    R = best((i,) for i in I)
+    # Greedily add two elements at a time
+    while len(R) < r:
+      R = best(tuple(R)+(i,j) for i in I for j in I if i<j)
+      print('R = %s, energy = %g'%(R,energy(R)))
+  else:
+    R = []
+    # Greedily add one element at a time
+    while len(R) < r:
+      R = best(tuple(R)+(i,) for i in I)
+
+  # Search for 1-opt
+  while 1:
+    def replace(R,i,j):
+      R = list(R)
+      R[i] = j
+      return R
+    R2 = best(replace(R,i,j) for i in xrange(len(R)) for j in I)
+    if all(R == R2):
+      break
+    R = R2
+    print('R = %s, energy = %g'%(R,energy(R)))
+  assert len(R) == r
+  print('R = %s, energy = %g'%(R,energy(R)))
+  return R
+
+def rejection_represent(G,vote,r=5):
+  """Choose r representatives that best reproduce the votes of the majority""" 
+  assert r%2==1, "For now, assume an odd number of representatives"
+  V = vertices(G)
+  maj = mean(vote,axis=1) > 1/2 # Majority vote 
+  
+  # We want a subset R of size r that maximizes
+  #   sum((mean(vote[:,R]) > 1/2) == maj)
+  # Doing this really well is hard, so we'll start with greedy plus 1-opt
+  def energy(R):
+    assert len(R)%2==1
+    if len(set(R))<len(R):
+      return -inf
+    return -sum((mean(vote[:,asarray(R)],axis=1) > 1/2) == maj)
+  R = greedy_subset(energy,n=len(V),r=r,odd=1)
+  R = [V[i] for i in R]
+  print('R = %s'%(R))
+  return R
+
+def lazy_vote(G,r=5,p=1/2,samples=1000,iters=1000,seed=8121):
+  V = vertices(G)
+  deg = asarray([len(G[v]) for v in V])
+  print('max deg = %d'%deg.max())
+
+  # Compute a bunch of vote distributions
+  dists = []
+  random.seed(seed)
+  for s in xrange(samples):
+    # Choose randomly whether each person will vote directly
+    active = random.uniform(size=len(V)) < p
+
+    # Generate sparse transition matrix, very slowly
+    T = eye(len(V)) 
+    for i,v in enumerate(V):
+      if not active[i]:
+        es = list(set(V.index(x) for x in G[v]))
+        if len(es):
+          T[i,i] = 0
+          T[es,i] = 1/len(es)
+    T = scipy.sparse.csr_matrix(T)
+
+    # Partially converge to a vote distribution
+    x = ones(len(V))/len(V)
+    for i in xrange(iters):
+      x = T*x
+    assert allclose(sum(x),1)
+    dists.append(x)
+  dists = asarray(dists)
+
+  # Color based on average amount of voting power
+  color = mean(dists,axis=0)
+  color = green_to_red(G,color)
+
+  # Given a vote distribution x with sum(x) = 1 and individual preferences v_i in {0,1},
+  # we vote yes as a whole if sum(x_i*v_i) > 1/2.  Ug, that's basically a knapsack
+  # problem.  I still want to do the majority cutoff method rather than simple
+  # correlation, so let's apply random sampling again.
+  votes = random.randint(2,size=len(V)*samples).reshape(-1,len(V))
+  def energy(R,verbose=False):
+    x = dists*votes
+    if 0: # Representatives vote according to their assembled power
+      y = x[:,R]
+      y /= sum(y,axis=-1)[:,None]
+    else: # Representatives vote equally
+      y = votes[:,R]/len(R)
+    similar = sum((sum(x,axis=-1) > 1/2)==(sum(y,axis=-1) > 1/2))
+    return -similar
+  R = greedy_subset(energy,n=len(V),r=r)
+  R = [V[i] for i in R]
+
+  return color,R
+
+def draw(G,file,label=None,color=None,reps=None):
+  print('writing %s'%(file))
+
+  GV = Digraph(comment=file)
   nodes = {}
   def node(i):
     if i not in nodes:
       n = str(len(nodes))
       nodes[i] = n
-      G.node(n,label=(None if label is None else label(i)))
+      ks = {}
+      ks['label'] = None if label is None else label(i)
+      if color is not None:
+        ks['style'] = 'filled'
+        ks['fillcolor'] = color[i]
+      if reps is not None and i in reps:
+        ks['penwidth'] = '10'
+      GV.node(n,**ks)
     return nodes[i]
-  for d in data:
-    if d[id]:
-      x = node(d[id])
-      for e in edges:
-        if d[e]:
-          G.edge(x,node(d[e]))
-  G.render(filename=file)
+  for i in vertices(G):
+    x = node(i)
+    for e in G[i]:
+      GV.edge(x,node(e))
+
+  # Render to a temporary directory, then copy the file back
+  dir = tempfile.mkdtemp(prefix='phage-proxy') 
+  try:
+    GV.render(filename=os.path.join(dir,'graph'))
+    os.rename(os.path.join(dir,'graph.pdf'),file)
+  finally:
+    shutil.rmtree(dir)
 
 def main():
-  lines = tuple(csv.reader(open('votes.csv','rb')))
+  # Types of graphs to plot
+  graphs = {'resolve':('resolver1','resolver2'),
+            'sage':('sage1','sage2'),
+            'cook':('cook1','cook2','cook3'),
+            'invite':('inviter',)}
+
+  # Commnand line arguments
+  usage = 'usage: %prog <options>'
+  P = optparse.OptionParser(usage)
+  P.add_option('-i','--input',default='votes.csv',help='Input csv file from Wufoo')
+  P.add_option('-o','--output',default='',help='Output pdf file')
+  P.add_option('-g','--graph',default='resolve',choices=list(graphs)+['all'],help='Type of graph to analyze')
+  P.add_option('-a','--analyze',default=True,help='If true, perform voting analysis.  If false, just draw.')
+  P.add_option('-r','--reps',default=5,help='Number of representatives to compute')
+  P.add_option('-p','--vote-prob',default=.4,type=float,help='Probability that each person votes')
+  P.add_option('-n','--samples',default=2000,type=int,help='Number of samples (more is more accurate and slower)')
+  P.add_option('-s','--seed',default=1827322,type=int,help='Random seed for sampling')
+  P.add_option('-l','--label',default='none',choices=['none','name'],help='Node label type')
+  O,args = P.parse_args()
+
+  if args:
+    P.error('No arguments expected')
+  if O.graph=='all':
+    assert not O.output,'Specifying an output file with --graph all with cause files to be overwritten'
+  if O.output:
+    assert O.output.exdswith('.pdf'), '--output=%s should be a .pdf'%O.output
+
+  print('reading input from %s'%O.input)
+  lines = tuple(csv.reader(open(O.input,'rb')))
   header = lines[0]
-  print('fields:')
-  for h in header:
-    print('  '+repr(h))
-  print
+  if 0:
+    print('fields:')
+    for h in header:
+      print('  '+repr(h))
+    print
   data = [fields(e,header,**fs) for e in lines[1:]]
   data = [d for d in data if d is not None]
   print('count = %d'%len(data))
   print('valid = %d'%len(filter(valid,data)))
   #data = filter(valid,data)
+  print()
 
   def name(email):
     return re.sub('-.*','',email).strip()
+  def none(email):
+    return ''
+  label = {'name':name,'none':none}[O.label]
 
-  draw(data,'name',['resolver1','resolver2'],file='resolve',label=name)
-  draw(data,'name',['sage1','sage2'],file='sage',label=name)
-  draw(data,'name',['cook1','cook2','cook3'],file='cook',label=name)
-  draw(data,'name',['inviter'],file='invite',label=name)
+  for g in list(graphs) if O.graph=='all' else [O.graph]:
+    print('analyzing %s'%g)
+    G = graph(data,'name',graphs[g]) 
+
+    if O.analyze and g != 'invite':
+      color,reps = lazy_vote(G,r=O.reps,p=O.vote_prob,samples=O.samples,seed=O.seed)
+    else:
+      color,reps = None,None
+
+    output = O.output or g+'.pdf'
+    draw(G,file=output,label=label,color=color,reps=reps)
+    print()
 
 if __name__=='__main__':
   main()
