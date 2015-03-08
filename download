@@ -4,6 +4,7 @@ from __future__ import division,print_function
 import base64
 import json
 import urllib2
+import os
 
 def download(sub,form,kind='json',password=None):
   req = urllib2.Request('https://%s.wufoo.com/api/v3/forms/%s/entries.%s'%(sub,form,kind))
@@ -20,5 +21,6 @@ def download(sub,form,kind='json',password=None):
         print(e.headers)
         print(e.headers['www-authenticate'])
 
-votes = download('jebagu','phage-fractal-vote-experiment')
+votes = download('jebagu','phage-fractal-vote-experiment',
+  password = os.environ.get('PHAGE_WUFOO_API_KEY'))
 print(votes)
