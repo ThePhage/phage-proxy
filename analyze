@@ -188,11 +188,11 @@ def greedy_subset(energy,n,odd=False,r=5):
   return R
 
 def rejection_represent(G,vote,r=5):
-  """Choose r representatives that best reproduce the votes of the majority""" 
+  """Choose r representatives that best reproduce the votes of the majority"""
   assert r%2==1, "For now, assume an odd number of representatives"
   V = vertices(G)
-  maj = mean(vote,axis=1) > 1/2 # Majority vote 
-  
+  maj = mean(vote,axis=1) > 1/2 # Majority vote
+
   # We want a subset R of size r that maximizes
   #   sum((mean(vote[:,R]) > 1/2) == maj)
   # Doing this really well is hard, so we'll start with greedy plus 1-opt
@@ -219,7 +219,7 @@ def lazy_vote(G,r=5,p=1/2,samples=1000,iters=1000,seed=8121):
     active = random.uniform(size=len(V)) < p
 
     # Generate sparse transition matrix, very slowly
-    T = eye(len(V)) 
+    T = eye(len(V))
     for i,v in enumerate(V):
       if not active[i]:
         es = list(set(V.index(x) for x in G[v]))
@@ -285,7 +285,7 @@ def draw(G,file,label=None,color=None,reps=None):
       GV.edge(x,node(e))
 
   # Render to a temporary directory, then copy the file back
-  dir = tempfile.mkdtemp(prefix='phage-proxy') 
+  dir = tempfile.mkdtemp(prefix='phage-proxy')
   try:
     GV.render(filename=os.path.join(dir,'graph'))
     os.rename(os.path.join(dir,'graph.pdf'),file)
@@ -343,7 +343,7 @@ def main():
 
   for g in list(graphs) if O.graph=='all' else [O.graph]:
     print('analyzing %s'%g)
-    G = graph(data,'name',graphs[g]) 
+    G = graph(data,'name',graphs[g])
 
     if O.analyze and g != 'invite':
       color,reps = lazy_vote(G,r=O.reps,p=O.vote_prob,samples=O.samples,seed=O.seed)
