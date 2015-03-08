@@ -5,10 +5,10 @@ import base64
 import json
 import urllib2
 
-def download(sub,form,kind='json',username=None,password=None):
+def download(sub,form,kind='json',password=None):
   req = urllib2.Request('https://%s.wufoo.com/api/v3/forms/%s/entries.%s'%(sub,form,kind))
-  if username is not None:
-    req.add_header('Authorization','Basic %s'%(base64.encodestring('%s:%s'%(username,password)).replace('\n','')))
+  if password is not None:
+    req.add_header('Authorization','Basic %s'%(base64.encodestring('%s:'%(password)).replace('\n','')))
   print(req.headers)
   try:
     return json.loads(urllib2.urlopen(req).read())
