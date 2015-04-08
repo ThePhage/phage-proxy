@@ -16,15 +16,29 @@ def sanitize(info):
 
 # TODO: Some people have duplicate entries and should be pruned accordingly
 def fields(entry,header,**kwds):
+  def resolve(v):
+    if isinstance(v,dict):
+      (k,i), = v.items()
+      return resolve(kwds[k])+i
+    try:
+      return header.index(v)
+    except ValueError:
+      return -1
   d = {}
-  for k,(v,v2) in kwds.items():
-    i = header.index(v)
-    x = entry[i] if i<len(entry) else None
-    if not x or x == 'Name does not appear in this list':
-      i = header.index(v2)
+  for k,vs in kwds.items():
+    if isinstance(vs,tuple):
+      v,v2 = vs
+    else:
+      v,v2 = vs,None
+    i = resolve(v)
+    if i >= 0:
       x = entry[i] if i<len(entry) else None
-    x = sanitize(x) if x else None
-    d[k] = x
+      if v2 and (not x or x == 'Name does not appear in this list'):
+        i = resolve(v2)
+        if i >= 0:
+          x = entry[i] if i<len(entry) else None
+      x = sanitize(x) if x else None
+      d[k] = x
   return d
 
 def valid(d):
@@ -52,6 +66,9 @@ fs = {
             "Sage friend 1: If the person who you chose isn't in the menu above, please put their name here"),
   'sage2': ('A second Phageling you would approach for life advice:',
             "Sage friend 2: If the person who you chose isn't in the menu above, please put their name here"),
+  'noob1': 'Who would you trust to (a) interview the phageling who has expressed concerns, (b) objectively listen to both sides of the story,  (c) weigh the facts, and (d) cast a vote on your behalf.',
+  'noob2': {'noob1':+1},
+  'noob3': {'noob1':+2},
 }
 
 def graph(data,id,edges):
@@ -206,7 +223,7 @@ def rejection_represent(G,vote,r=5):
   print('R = %s'%(R))
   return R
 
-def lazy_vote(G,r=5,p=1/2,samples=1000,iters=1000,seed=8121):
+def lazy_vote(G,r=5,p=1/2,samples=1000,iters=1000,seed=8121,simple=False):
   V = vertices(G)
   deg = asarray([len(G[v]) for v in V])
   print('max deg = %d'%deg.max())
@@ -237,28 +254,37 @@ def lazy_vote(G,r=5,p=1/2,samples=1000,iters=1000,seed=8121):
   dists = asarray(dists)
 
   # Color based on average amount of voting power
-  color = mean(dists,axis=0)
+  score = mean(dists,axis=0)
   if 0: # Transform to be a straight line
-    color[argsort(color)] = arange(len(color))
-  color = green_to_red(G,color)
+    score[argsort(score)] = arange(len(score))
+  color = green_to_red(G,score)
 
-  # Given a vote distribution x with sum(x) = 1 and individual preferences v_i in {0,1},
-  # we vote yes as a whole if sum(x_i*v_i) > 1/2.  Ug, that's basically a knapsack
-  # problem.  I still want to do the majority cutoff method rather than simple
-  # correlation, so let's apply random sampling again.
-  votes = random.randint(2,size=len(V)*samples).reshape(-1,len(V))
-  def energy(R,verbose=False):
-    x = dists*votes
-    if 0: # Representatives vote according to their assembled power
-      y = x[:,R]
-      y /= sum(y,axis=-1)[:,None]
-    else: # Representatives vote equally
-      y = votes[:,R]/len(R)
-    similar = sum((sum(x,axis=-1) > 1/2)==(sum(y,axis=-1) > 1/2))
-    return -similar
-  R = greedy_subset(energy,n=len(V),r=r)
+  # In simple mode, just return the top scoring folk
+  if simple:
+    R = argsort(-score)[:r]
+    if 1:
+      print('The top few scores:')
+      for i in R:
+        print('  %.5g : %s'%(score[i],V[i]))
+
+  else:
+    # Given a vote distribution x with sum(x) = 1 and individual preferences v_i in {0,1},
+    # we vote yes as a whole if sum(x_i*v_i) > 1/2.  Ug, that's basically a knapsack
+    # problem.  I still want to do the majority cutoff method rather than simple
+    # correlation, so let's apply random sampling again.
+    votes = random.randint(2,size=len(V)*samples).reshape(-1,len(V))
+    def energy(R,verbose=False):
+      x = dists*votes
+      if 0: # Representatives vote according to their assembled power
+        y = x[:,R]
+        y /= sum(y,axis=-1)[:,None]
+      else: # Representatives vote equally
+        y = votes[:,R]/len(R)
+      similar = sum((sum(x,axis=-1) > 1/2)==(sum(y,axis=-1) > 1/2))
+      return -similar
+    R = greedy_subset(energy,n=len(V),r=r)
+
   R = [V[i] for i in R]
-
   return color,R
 
 def draw(G,file,label=None,color=None,reps=None):
@@ -297,6 +323,7 @@ def main():
   graphs = {'resolve':('resolver1','resolver2'),
             'sage':('sage1','sage2'),
             'cook':('cook1','cook2','cook3'),
+            'noob':('noob1','noob2','noob3'),
             'invite':('inviter',)}
 
   # Commnand line arguments
@@ -305,12 +332,14 @@ def main():
   P.add_option('-i','--input',default='votes.csv',help='Input csv file from Wufoo')
   P.add_option('-o','--output',default='',help='Output pdf file')
   P.add_option('-g','--graph',default='resolve',choices=list(graphs)+['all'],help='Type of graph to analyze')
-  P.add_option('-a','--analyze',default=True,help='If true, perform voting analysis.  If false, just draw.')
-  P.add_option('-r','--reps',default=5,help='Number of representatives to compute')
+  P.add_option('-a','--analyze',action='store_true',help='If true, perform voting analysis.  If false, just draw.')
+  P.add_option('-r','--reps',default=5,type=int,help='Number of representatives to compute')
   P.add_option('-p','--vote-prob',default=.4,type=float,help='Probability that each person votes')
   P.add_option('-n','--samples',default=2000,type=int,help='Number of samples (more is more accurate and slower)')
   P.add_option('-s','--seed',default=1827322,type=int,help='Random seed for sampling')
   P.add_option('-l','--label',default='none',choices=['none','name'],help='Node label type')
+  P.add_option('--simple',action='store_true',help='Skip representative analysis and just compute top scorers')
+  P.add_option('--partial-label',action='store_true',help='Only label representatives')
   O,args = P.parse_args()
 
   if args:
@@ -346,9 +375,13 @@ def main():
     G = graph(data,'name',graphs[g])
 
     if O.analyze and g != 'invite':
-      color,reps = lazy_vote(G,r=O.reps,p=O.vote_prob,samples=O.samples,seed=O.seed)
+      color,reps = lazy_vote(G,r=O.reps,p=O.vote_prob,samples=O.samples,seed=O.seed,simple=O.simple)
     else:
       color,reps = None,None
+
+    if O.partial_label:
+      old_label = label
+      label = lambda email: old_label(email) if email in reps else ''
 
     output = O.output or g+'.pdf'
     draw(G,file=output,label=label,color=color,reps=reps)
