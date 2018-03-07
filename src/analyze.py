@@ -292,8 +292,8 @@ def lazy_vote(G, r=5, p=0.5, samples=1000, iters=1000, seed=8121, simple=False):
                 print('    %.5g : %s' % (score[i], V[i]))
     else:
         # Given a vote distribution x with sum(x) = 1 and individual preferences v_i in {0,1},
-        # we vote yes as a whole if sum(x_i*v_i) > 1/2.    Ug, that's basically a knapsack
-        # problem.    I still want to do the majority cutoff method rather than simple
+        # we vote yes as a whole if sum(x_i*v_i) > 1/2. Ug, that's basically a knapsack
+        # problem. I still want to do the majority cutoff method rather than simple
         # correlation, so let's apply random sampling again.
         votes = numpy.random.randint(2, size=(len(V) * samples)).reshape(-1, len(V))
 

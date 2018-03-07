@@ -5,27 +5,20 @@ Graphs and analyses of proxy voting information for Phage.
 
 ### Setup
 
-The code is Python 3, but depends on
-
-* [Graphviz](http://graphviz.org): Graph visualization
-* [Graphviz python module](https://pypi.python.org/pypi/graphviz): Graphviz interface
-* [Numpy](http://numpy.org): Efficient multidimensional arrays
-* [Scipy](http://scipy.org): Scientific computation
-
-Use your [virtual environment of choice][1], mine is [virtualenv][2], so I
-create a new one using:
+The code is Python 3. To run, download and install dependencies in your [virtual
+environment of choice][1]. Mine is [virtualenv][2], so it would look like:
 
 ```
 virtualenv -p $(which python3) env
 ```
 
-Activate it:
+And activating it:
 
 ```
 source env/bin/activate
 ```
 
-Then install the dependencies with pip:
+To install the dependencies with pip:
 
 ```
 pip install -r requirements.txt
@@ -65,14 +58,14 @@ function _f_ : _V_ -> _B_ with correlations between the different
 <em>f</em>(<em>v</em>) somehow related to the edges. Once we have a model for
 said correlations, we can choose a subset _R_ of _V_ of size _r_ that maximizes
 
-<p style="text-align:center;">Pr(<em>sign</em>(<em>sum</em>(<em>f</em>(<em>R</em>))) = <em>sign</em>(<em>sum</em>(<em>f</em>(<em>V</em>))))</p>
+<p align="center">Pr(<em>sign</em>(<em>sum</em>(<em>f</em>(<em>R</em>))) = <em>sign</em>(<em>sum</em>(<em>f</em>(<em>V</em>))))</p>
 
 or some such. For simplicity, assume both _r_ and |<em>V</em>| are odd for now.
 
 Note that it's important to minimize the above sign-based metric, rather than
 something less nonlinear like
 
-<p style="text-align: center;">E(<em>sum</em>(<em>f</em>(<em>R</em>)) <em>sum</em>(<em>f</em>(<em>V</em>)))</style>
+<p align="center">E(<em>sum</em>(<em>f</em>(<em>R</em>)) <em>sum</em>(<em>f</em>(<em>V</em>)))</style>
 
 The latter doesn't get proportional representation right: if there are two
 uniform voting blocs making up 49% and 51% of the population, we'd pick all
@@ -89,7 +82,7 @@ _i_ vertex is inconsistent with exactly _j_ of its proxies. We have
 acceptance independently for each vertex, and let _A_ be the event that everyone
 accepts. We can now define a random function _Y_ by
 
-<p style="text-align:center;">Pr(Y = f) = Pr(X = f | A)</p>
+<p align="center">Pr(<em>Y</em> = <em>f</em>) = Pr(<em>X</em> = <em>f</em> | <em>A</em>)</p>
 
 This is well defined because Pr(<em>A</em>) > 0 since Pr(everyone wants +1) > 0.
 
