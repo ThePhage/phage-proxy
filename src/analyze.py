@@ -21,7 +21,7 @@ def sanitize(info):
 def fields(entry, header, **kwds):
     def resolve(v):
         if isinstance(v, dict):
-            (k, i), = v.items()
+            (k, i), = list(v.items())
             return resolve(kwds[k]) + i
         try:
             return header.index(v)
@@ -29,7 +29,7 @@ def fields(entry, header, **kwds):
             return -1
 
     d = {}
-    for k, vs in kwds.items():
+    for k, vs in list(kwds.items()):
         if isinstance(vs, tuple):
             v, v2 = vs
         else:
@@ -47,7 +47,7 @@ def fields(entry, header, **kwds):
 
 
 def valid(d):
-    for v in d.values():
+    for v in list(d.values()):
         if not v:
             return False
     return True
@@ -192,10 +192,10 @@ def greedy_subset(energy, n, odd=False, r=5):
 
     def best(Rs):
         Rs = numpy.asarray(list(Rs))
-        R = Rs[numpy.argmin(map(tweaked, Rs))]
+        R = Rs[numpy.argmin(list(map(tweaked, Rs)))]
         return numpy.sort(R)
 
-    K = xrange(n)
+    K = range(n)
     if odd:
         # Find the best singleton
         R = best((i,) for i in K)
@@ -215,7 +215,7 @@ def greedy_subset(energy, n, odd=False, r=5):
             R = list(R)
             R[i] = j
             return R
-        R2 = best(replace(R, i, j) for i in xrange(len(R)) for j in K)
+        R2 = best(replace(R, i, j) for i in range(len(R)) for j in K)
         if all(R == R2):
             break
         R = R2
@@ -255,7 +255,7 @@ def lazy_vote(G, r=5, p=0.5, samples=1000, iters=1000, seed=8121, simple=False):
     # Compute a bunch of vote distributions
     dists = []
     numpy.random.seed(seed)
-    for s in xrange(samples):
+    for s in range(samples):
         # Choose randomly whether each person will vote directly
         active = numpy.random.uniform(size=len(V)) < p
 
@@ -271,7 +271,7 @@ def lazy_vote(G, r=5, p=0.5, samples=1000, iters=1000, seed=8121, simple=False):
 
         # Partially converge to a vote distribution
         x = numpy.ones(len(V))/len(V)
-        for i in xrange(iters):
+        for i in range(iters):
             x = T*x
         assert numpy.allclose(sum(x), 1)
         dists.append(x)
@@ -385,11 +385,11 @@ def main():
         print('fields:')
         for h in header:
             print('    '+repr(h))
-        print
+        print()
     data = [fields(e, header, **fs) for e in lines[1:]]
     data = [d for d in data if d is not None]
     print('count = %d' % len(data))
-    print('valid = %d' % len(filter(valid, data)))
+    print('valid = %d' % len(list(filter(valid, data))))
     # data = filter(valid,data)
     print()
 
