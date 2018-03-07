@@ -1,2 +1,5 @@
 *.pdf
 *.csv
+*.pyc
+*.swp
+env
