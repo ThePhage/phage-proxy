@@ -58,14 +58,14 @@ function _f_ : _V_ -> _B_ with correlations between the different
 <em>f</em>(<em>v</em>) somehow related to the edges. Once we have a model for
 said correlations, we can choose a subset _R_ of _V_ of size _r_ that maximizes
 
-<p align="center">Pr(<em>sign</em>(<em>sum</em>(<em>f</em>(<em>R</em>))) = <em>sign</em>(<em>sum</em>(<em>f</em>(<em>V</em>))))</p>
+<p align="center">Pr(<em>sign</em>(<em>sum</em>(<em>f</em>(<em>R</em>)))) = <em>sign</em>(<em>sum</em>(<em>f</em>(<em>V</em>)))</p>
 
 or some such. For simplicity, assume both _r_ and |<em>V</em>| are odd for now.
 
 Note that it's important to minimize the above sign-based metric, rather than
 something less nonlinear like
 
-<p align="center">E(<em>sum</em>(<em>f</em>(<em>R</em>)) <em>sum</em>(<em>f</em>(<em>V</em>)))</style>
+<p align="center">E(<em>sum</em>(<em>f</em>(<em>R</em>)) <em>sum</em>(<em>f</em>(<em>V</em>)))</p>
 
 The latter doesn't get proportional representation right: if there are two
 uniform voting blocs making up 49% and 51% of the population, we'd pick all
