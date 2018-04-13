@@ -1,8 +1,11 @@
 """
 Produce the graphs.
+
+TODO: use logger instead of print statements.
 """
 from __future__ import division, print_function
 from graphviz import Digraph
+import collections
 import numpy
 import scipy.sparse
 import optparse
@@ -15,42 +18,6 @@ import os
 
 def sanitize(info):
     return re.sub(' - .*', '', info).strip()
-
-
-# TODO: Some people have duplicate entries and should be pruned accordingly
-def fields(entry, header, **kwds):
-    def resolve(v):
-        if isinstance(v, dict):
-            (k, i), = list(v.items())
-            return resolve(kwds[k]) + i
-        try:
-            return header.index(v)
-        except ValueError:
-            return -1
-
-    d = {}
-    for k, vs in list(kwds.items()):
-        if isinstance(vs, tuple):
-            v, v2 = vs
-        else:
-            v, v2 = vs, None
-        i = resolve(v)
-        if i >= 0:
-            x = entry[i] if i < len(entry) else None
-            if v2 and (not x or x == 'Name does not appear in this list'):
-                i = resolve(v2)
-                if i >= 0:
-                    x = entry[i] if i < len(entry) else None
-            x = sanitize(x) if x else None
-            d[k] = x
-    return d
-
-
-def valid(d):
-    for v in list(d.values()):
-        if not v:
-            return False
-    return True
 
 
 fs = {
@@ -82,22 +49,16 @@ fs = {
 
 
 def graph(data, id, edges):
-    """Extract a graph from data, given as a dictionary node -> out_edges.
-    The graph is closed by introducing vertices with no outgoing edges if necessary."""
-    G = {}
-
-    def add(x):
-        if x not in G:
-            G[x] = []
-        return x
-    for d in data:
-        if d[id]:
-            x = add(d[id])
-            for e in edges:
-                if d[e]:
-                    y = add(d[e])
-                    G[x].append(y)
-    return G
+    """
+    Extract a graph from data, given as a dictionary node -> out_edges.
+    The graph is closed by introducing vertices with no outgoing edges if necessary.
+    """
+    graph = collections.defaultdict(list)
+    for row in data:
+        user_field = row[id]
+        for e in edges:
+            graph[user_field].append(row[e])
+    return graph
 
 
 def vertices(G):
@@ -348,7 +309,7 @@ def draw(G, file, label=None, color=None, reps=None):
 def main():
     # Types of graphs to plot
     graphs = {
-        'resolve': ('resolver1', 'resolver2'),
+        'resolve': ('resolver1', 'resolver2', 'resolver3'),
         'sage': ('sage1', 'sage2'),
         'cook': ('cook1', 'cook2', 'cook3'),
         'noob': ('noob1', 'noob2', 'noob3'),
@@ -379,19 +340,12 @@ def main():
         assert O.output.exdswith('.pdf'), '--output=%s should be a .pdf' % O.output
 
     print('reading input from %s' % O.input)
-    lines = tuple(csv.reader(open(O.input, 'rb')))
-    header = lines[0]
-    if 0:
-        print('fields:')
-        for h in header:
-            print('    '+repr(h))
-        print()
-    data = [fields(e, header, **fs) for e in lines[1:]]
-    data = [d for d in data if d is not None]
-    print('count = %d' % len(data))
-    print('valid = %d' % len(list(filter(valid, data))))
-    # data = filter(valid,data)
-    print()
+    data = None
+    fieldnames = ['id', 'name', 'resolver1', 'resolver2', 'resolver3']
+    with open(O.input, 'r') as csvfile:
+        filedata = csv.DictReader(csvfile, fieldnames=fieldnames)
+        data = [row for row in filedata]
+        data = data[1:]  # Lop off the header row
 
     def name(email):
         return re.sub('-.*', '', email).strip()

@@ -1,5 +1,4 @@
-Phage proxy voting experiment
-=============================
+# Phage proxy voting experiment
 
 Graphs and analyses of proxy voting information for Phage.
 
@@ -23,6 +22,16 @@ To install the dependencies with pip:
 ```
 pip install -r requirements.txt
 ```
+
+You'll also need [GraphViz][4] to run the visualizations (namely, the
+`dot` command). If you're on a Mac and have [Homebrew][5], you can run
+
+```
+brew install graphviz
+```
+
+and you're golden. If you're on Linux, it's probably on `apt-get` or `yum` or
+something.
 
 ## Model
 
@@ -116,3 +125,5 @@ assign their vote simply assigns it via <em>S<sup>inf</sup></em> ones.
    [1]: https://stackoverflow.com/questions/41573587/what-is-the-difference-between-venv-pyvenv-pyenv-virtualenv-virtualenvwrappe
    [2]: https://virtualenv.pypa.io/en/stable/
    [3]: http://www.newciv.org/nl/newslog.php/_v45/__show_article/_a000009-000320.htm
+   [4]: https://www.graphviz.org/
+   [5]: https://brew.sh/
